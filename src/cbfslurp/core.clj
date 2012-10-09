@@ -4,18 +4,18 @@
   (:require [clj-http.client :as http]
             [clojure.java.io :as io]
             [clojure.string :as string]
+            [cbdrawer.transcoders :refer [json-transcoder]]
             [cbdrawer.view :as view]
-            [cbdrawer.ops :as cb]
-            [cbdrawer.client :as cbcli]))
+            [cbdrawer.client :as cb]))
 
 (defn cbfs-files [factory & [start end]]
   (->> (view/view-seq
-        (view/view-url (cbcli/capi-bases factory) "cbfs" "file_browse")
+        (view/view-url (cb/capi-bases factory) "cbfs" "file_browse")
         {:startkey start :endkey (or end {}) :include_docs true})
        (map (juxt :id (comp :oid :json :doc)))))
 
 (defn do-fetch [cbconn oid destname]
-  (cb/with-json-encoding
+  (cb/with-transcoder json-transcoder
     (let [blob (cb/get cbconn (str "/" oid))
           node (rand-nth (mapv first (:nodes blob)))
           nobj (cb/get cbconn (str "/" (name node)))
@@ -27,8 +27,8 @@
       (println destname))))
 
 (defn grab-stuff [{cburl :couchbase cbbucket :bucket cbpass :password} paths]
-  (let [fact (cbcli/factory cbbucket cbpass cburl)
-        cbconn (cbcli/client fact)]
+  (let [fact (cb/factory cbbucket cbpass cburl)
+        cbconn (cb/client fact)]
     (try 
       (let [files (mapcat (fn [path]
                             (let [splitpath (string/split path #"/")]
@@ -36,7 +36,7 @@
         (doseq [fu (doall (map (fn [f] (future (do-fetch cbconn (second f) (first f)))) files))]
           @fu) 
         (println "Done!")) 
-      (finally (cbcli/shutdown cbconn)))))
+      (finally (cb/shutdown cbconn)))))
 
 (defn -main
   [& args]
